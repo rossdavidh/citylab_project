@@ -1,3 +1,4 @@
+#include "rclcpp/publisher_options.hpp"
 #include "std_msgs/msg/string.hpp"
 #include <cmath>
 #include <geometry_msgs/msg/twist.hpp>
@@ -13,14 +14,25 @@
 class Patrol : public rclcpp::Node {
 public:
   Patrol() : Node("patrol_node") {
-    // Subscriber to LaserScan
+    // Create two mutually exclusive callback groups
+    mutuallyexclusive_group_1_ = this->create_callback_group(
+        rclcpp::CallbackGroupType::MutuallyExclusive);
+    mutuallyexclusive_group_2_ = this->create_callback_group(
+        rclcpp::CallbackGroupType::MutuallyExclusive);
+
+    // Set up laserscan for first callback group
+    rclcpp::SubscriptionOptions sub_options;
+    sub_options.callback_group = mutuallyexclusive_group_1_;
     subscriber_laser_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
         "/laser_scan", 10,
-        std::bind(&Patrol::laserscan_callback, this, std::placeholders::_1));
+        std::bind(&Patrol::laserscan_callback, this, std::placeholders::_1),
+        sub_options);
 
-    // Publisher for movement commands
+    // Set up movement commands for second callback group
+    rclcpp::PublisherOptions pub_options;
+    pub_options.callback_group = mutuallyexclusive_group_2_;
     publisher_ = this->create_publisher<geometry_msgs::msg::Twist>(
-        "/fastbot_1/cmd_vel", 10);
+        "/fastbot_1/cmd_vel", 10, pub_options);
 
     // Initialize state variables
     distance_from_obstacle_ = std::numeric_limits<float>::infinity();
