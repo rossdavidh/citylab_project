@@ -28,9 +28,10 @@ public:
         std::bind(&Patrol::laserscan_callback, this, std::placeholders::_1),
         sub_options);
 
-// Set up movement commands for second callback group
-#FIXME : make timer_ here to invoke callback, which will itself
-#publish commands for movement to the publisher_
+    timer_action_ = this->create_wall_timer(
+        0.1, std::bind(&Patrol::determine_action_callback, this),
+        mutuallyexclusive_group_2_);
+
     publisher_ = this->create_publisher<geometry_msgs::msg::Twist>(
         "/fastbot_1/cmd_vel", 10);
 
@@ -48,9 +49,10 @@ private:
     for (const auto &sector : sectors) {
       min_distances[sector.first] = std::numeric_limits<float>::infinity();
     }
-    blocked_sector = "";
+    safest_direction = "";
     overall_min_distance = std::numeric_limits<float>::infinity();
-
+    float overall_max_distance = 0;
+    int max_index;
     // Find the minimum distance in each sector
     for (const auto &sector : sectors) {
       int start_idx = sector.second.first;
@@ -64,15 +66,15 @@ private:
 
         if (start_it < end_it) {
           min_distances[sector.first] = *std::min_element(start_it, end_it);
+          if (*std::max_element(start_it, end_it) > overall_max_distance) {
+            max_index = std::distance(start_it, overall_max_distance);
+            safest_direction = sector.first;
+          }
         }
         if (min_distances[sector.first] < overall_min_distance) {
-          // The sector with the nearest obstacled is the 'blocked_sector',
-          // even though we haven't checked yet if it is actually less
-          // than our threshold for declaring that we are blocked.  If we
-          // are blocked, this is the sector where we are closest.
-          blocked_sector = sector.first;
           overall_min_distance = min_distances[sector.first];
         }
+        // TODO: find direction
       }
     }
   }
@@ -89,14 +91,14 @@ private:
       action.linear.x = 0.1; // Move forward
       action.angular.z = 0.0;
       // RCLCPP_INFO(this->get_logger(), "No obstacles, moving forward.");
-    } else if (blocked_sector == "Front_Right") {
-      action.linear.x = 0.01;
+    } else if (safest_direction == "Front_Left") {
+      action.linear.x = 0.0;
       action.angular.z = 0.3; // Turn left
-      RCLCPP_INFO(this->get_logger(), "Obstacle ahead right, turning to left.");
+      RCLCPP_INFO(this->get_logger(), "Obstacle ahead, turning to left.");
     } else {
-      action.linear.x = 0.01;
+      action.linear.x = 0.0;
       action.angular.z = -0.3; // Turn right
-      RCLCPP_INFO(this->get_logger(), "Obstacle ahead left, turning to right.");
+      RCLCPP_INFO(this->get_logger(), "Obstacle ahead, turning to right.");
     }
 
     publisher_->publish(action);
@@ -105,12 +107,13 @@ private:
 private:
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr
       subscriber_laser_;
+  rclcpp::TimerBase::SharedPtr timer_action_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher_;
   float distance_from_obstacle_;
   std::map<std::string, std::pair<int, int>> sectors = {
       {"Front_Right", {75, 100}}, {"Front_Left", {101, 125}}};
   float overall_min_distance;
-  std::string blocked_sector;
+  std::string safest_direction;
 };
 
 int main(int argc, char **argv) {
