@@ -8,6 +8,41 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+
+#Include directories
+include_directories(include)
+
+#Create executables
+add_executable(patrol src/patrol.cpp)
+ament_target_dependencies(patrol rclcpp)
+
+# Specify libraries to link a library or executable target against
+ament_target_dependencies(patrol
+  rclcpp
+  std_msgs
+  sensor_msgs
+  geometry_msgs
+)
+
+#Install executables
+install(TARGETS  patrol
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# Install launch files
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
+# Install header files
+install(DIRECTORY
+  include/
+  DESTINATION include/
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
